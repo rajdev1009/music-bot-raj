@@ -28,20 +28,19 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-API_URL = "https://api-inference.huggingface.co/models/facebook/musicgen-small"
+# YAHAN CHANGE KIYA HAI (New URL)
+API_URL = "https://router.huggingface.co/models/facebook/musicgen-small"
+
 HF_TOKEN = os.environ.get("HF_TOKEN")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
-# Updated Function: Ab ye Error check karega
 def query_music(payload):
     try:
         response = requests.post(API_URL, headers=headers, json=payload)
-        # Agar sab sahi hai (200 OK)
         if response.status_code == 200:
             return response.content, None
-        # Agar koi gadbad hai
         else:
             return None, response.text
     except Exception as e:
@@ -59,19 +58,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await context.bot.send_message(chat_id=chat_id, text=f"🎹 कोशिश कर रहा हूँ: '{user_text}'... (Wait 15s)")
 
-    # API Call
     audio_bytes, error_msg = query_music({"inputs": user_text})
     
     if error_msg:
-        # Agar Model Load ho raha hai (Sabse Common Error)
         if "loading" in error_msg.lower():
             await context.bot.send_message(chat_id=chat_id, text="⚠️ मॉडल अभी सो कर उठ रहा है (Loading)... \n\nकृपया **30 सेकंड रुकें** और फिर से वही मैसेज भेजें।")
         else:
-            # Koi aur Error
             await context.bot.send_message(chat_id=chat_id, text=f"❌ Error: {error_msg}")
         return
 
-    # Agar Gana ban gaya
     try:
         file_path = "music.flac"
         with open(file_path, "wb") as f:
