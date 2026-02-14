@@ -2,12 +2,11 @@ import os
 import requests
 import logging
 import threading
-import time
 from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
-# --- 1. Fake Server for Koyeb ---
+# --- 1. Fake Server for Koyeb Health Check ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -20,7 +19,7 @@ def run_flask():
 t = threading.Thread(target=run_flask)
 t.daemon = True
 t.start()
-# --------------------------------
+# ---------------------------------------------
 
 # --- 2. Bot Setup ---
 logging.basicConfig(
@@ -28,9 +27,8 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# YAHAN CHANGE KIYA HAI (New URL)
-API_URL = "https://router.huggingface.co/models/facebook/musicgen-small"
-
+# Naya Router URL
+API_URL = "https://router.huggingface.co/hf-inference/models/facebook/musicgen-small"
 HF_TOKEN = os.environ.get("HF_TOKEN")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
@@ -38,6 +36,7 @@ headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 def query_music(payload):
     try:
+        # Naye API ke liye 'inputs' key zaroori hai
         response = requests.post(API_URL, headers=headers, json=payload)
         if response.status_code == 200:
             return response.content, None
@@ -49,22 +48,24 @@ def query_music(payload):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="🎵 नमस्ते! मैं तैयार हूँ।\n\nबताओ कैसा गाना चाहिए? (Note: अगर मॉडल सो रहा होगा तो मैं बता दूंगा)"
+        text="🎵 नमस्ते राज भाई! अब मैं नए सिस्टम पर हूँ।\n\nबताओ कैसा गाना चाहिए? (जैसे: 'Romantic flute')"
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     chat_id = update.effective_chat.id
     
-    await context.bot.send_message(chat_id=chat_id, text=f"🎹 कोशिश कर रहा हूँ: '{user_text}'... (Wait 15s)")
+    await context.bot.send_message(chat_id=chat_id, text=f"🎹 गाना बनाने की कोशिश कर रहा हूँ: '{user_text}'... (15-20 sec रुकें)")
 
+    # API ko correct format mein data bhejna
     audio_bytes, error_msg = query_music({"inputs": user_text})
     
     if error_msg:
         if "loading" in error_msg.lower():
-            await context.bot.send_message(chat_id=chat_id, text="⚠️ मॉडल अभी सो कर उठ रहा है (Loading)... \n\nकृपया **30 सेकंड रुकें** और फिर से वही मैसेज भेजें।")
+            await context.bot.send_message(chat_id=chat_id, text="⚠️ मॉडल लोड हो रहा है। कृपया 30 सेकंड बाद फिर से मैसेज भेजें।")
         else:
-            await context.bot.send_message(chat_id=chat_id, text=f"❌ Error: {error_msg}")
+            await context.bot.send_message(chat_id=chat_id, text="❌ अभी सर्वर बिजी है, थोड़ी देर बाद ट्राई करें।")
+            print(f"Error logic: {error_msg}")
         return
 
     try:
@@ -74,7 +75,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await context.bot.send_audio(chat_id=chat_id, audio=open(file_path, 'rb'), title=f"Raj AI: {user_text}")
     except Exception as e:
-        await context.bot.send_message(chat_id=chat_id, text="❌ फाइल भेजने में दिक्कत आई।")
+        await context.bot.send_message(chat_id=chat_id, text="❌ ऑडियो फाइल भेजने में दिक्कत हुई।")
         print(e)
 
 if __name__ == '__main__':
@@ -85,6 +86,6 @@ if __name__ == '__main__':
         app_bot.add_handler(CommandHandler('start', start))
         app_bot.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
         
-        print("✅ Bot Started...")
+        print("✅ Bot is Live on Koyeb!")
         app_bot.run_polling()
         
