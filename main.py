@@ -2,11 +2,12 @@ import os
 import requests
 import logging
 import threading
+import time
 from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
-# --- 1. Fake Server for Koyeb Health Check ---
+# --- 1. Fake Server for Koyeb ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -14,14 +15,12 @@ def home():
     return "Bot is Running!"
 
 def run_flask():
-    # Koyeb Port 8000 par check karega
     app.run(host='0.0.0.0', port=8000)
 
-# Flask ko alag thread mein chalayenge taaki Bot na ruke
 t = threading.Thread(target=run_flask)
 t.daemon = True
 t.start()
-# ---------------------------------------------
+# --------------------------------
 
 # --- 2. Bot Setup ---
 logging.basicConfig(
@@ -35,30 +34,52 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
+# Updated Function: Ab ye Error check karega
 def query_music(payload):
-    response = requests.post(API_URL, headers=headers, json=payload)
-    return response.content
+    try:
+        response = requests.post(API_URL, headers=headers, json=payload)
+        # Agar sab sahi hai (200 OK)
+        if response.status_code == 200:
+            return response.content, None
+        # Agar koi gadbad hai
+        else:
+            return None, response.text
+    except Exception as e:
+        return None, str(e)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="🎵 नमस्ते! मैं Koyeb पर ज़िंदा हूँ!\n\nकैसा गाना चाहिए? (Example: 'Romantic guitar')"
+        text="🎵 नमस्ते! मैं तैयार हूँ।\n\nबताओ कैसा गाना चाहिए? (Note: अगर मॉडल सो रहा होगा तो मैं बता दूंगा)"
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     chat_id = update.effective_chat.id
     
-    await context.bot.send_message(chat_id=chat_id, text=f"🎹 गाना बना रहा हूँ: '{user_text}'... (15 sec)")
+    await context.bot.send_message(chat_id=chat_id, text=f"🎹 कोशिश कर रहा हूँ: '{user_text}'... (Wait 15s)")
 
+    # API Call
+    audio_bytes, error_msg = query_music({"inputs": user_text})
+    
+    if error_msg:
+        # Agar Model Load ho raha hai (Sabse Common Error)
+        if "loading" in error_msg.lower():
+            await context.bot.send_message(chat_id=chat_id, text="⚠️ मॉडल अभी सो कर उठ रहा है (Loading)... \n\nकृपया **30 सेकंड रुकें** और फिर से वही मैसेज भेजें।")
+        else:
+            # Koi aur Error
+            await context.bot.send_message(chat_id=chat_id, text=f"❌ Error: {error_msg}")
+        return
+
+    # Agar Gana ban gaya
     try:
-        audio_bytes = query_music({"inputs": user_text})
         file_path = "music.flac"
         with open(file_path, "wb") as f:
             f.write(audio_bytes) 
+        
         await context.bot.send_audio(chat_id=chat_id, audio=open(file_path, 'rb'), title=f"Raj AI: {user_text}")
     except Exception as e:
-        await context.bot.send_message(chat_id=chat_id, text="❌ Error आया, दोबारा कोशिश करो।")
+        await context.bot.send_message(chat_id=chat_id, text="❌ फाइल भेजने में दिक्कत आई।")
         print(e)
 
 if __name__ == '__main__':
